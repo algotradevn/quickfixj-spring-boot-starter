@@ -15,11 +15,15 @@
  */
 package io.allune.quickfixj.spring.boot.starter.autoconfigure.client;
 
-import io.allune.quickfixj.spring.boot.starter.application.EventPublisherApplicationAdapter;
-import io.allune.quickfixj.spring.boot.starter.autoconfigure.QuickFixJBootProperties;
-import io.allune.quickfixj.spring.boot.starter.connection.ConnectorManager;
-import io.allune.quickfixj.spring.boot.starter.connection.SessionSettingsLocator;
-import io.allune.quickfixj.spring.boot.starter.exception.ConfigurationException;
+import static org.apache.commons.lang3.StringUtils.isNotEmpty;
+import static org.quickfixj.jmx.JmxExporter.REGISTRATION_REPLACE_EXISTING;
+
+import java.util.Optional;
+import java.util.concurrent.Executor;
+
+import javax.management.ObjectName;
+import javax.sql.DataSource;
+
 import org.quickfixj.jmx.JmxExporter;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -33,6 +37,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+import io.allune.quickfixj.spring.boot.starter.application.EventPublisherApplicationAdapter;
+import io.allune.quickfixj.spring.boot.starter.autoconfigure.QuickFixJBootProperties;
+import io.allune.quickfixj.spring.boot.starter.connection.ConnectorManager;
+import io.allune.quickfixj.spring.boot.starter.connection.SessionSettingsLocator;
+import io.allune.quickfixj.spring.boot.starter.exception.ConfigurationException;
 import quickfix.Application;
 import quickfix.CachedFileStoreFactory;
 import quickfix.ConfigError;
@@ -54,13 +64,6 @@ import quickfix.SessionSettings;
 import quickfix.SleepycatStoreFactory;
 import quickfix.SocketInitiator;
 import quickfix.ThreadedSocketInitiator;
-
-import javax.management.ObjectName;
-import java.util.Optional;
-import java.util.concurrent.Executor;
-
-import static org.apache.commons.lang3.StringUtils.isNotEmpty;
-import static org.quickfixj.jmx.JmxExporter.REGISTRATION_REPLACE_EXISTING;
 
 /**
  * {@link EnableAutoConfiguration Auto-configuration} for QuickFix Client (Initiator)
@@ -88,8 +91,8 @@ public class QuickFixJClientAutoConfiguration {
 	@ConditionalOnClass(SessionSettings.class)
 	@ConditionalOnMissingBean(name = "clientSessionSettings")
 	public SessionSettings clientSessionSettings(
-			SessionSettingsLocator clientSessionSettingsLocator, QuickFixJBootProperties properties
-	) {
+			final SessionSettingsLocator clientSessionSettingsLocator, final QuickFixJBootProperties properties
+			) {
 		if (isNotEmpty(properties.getClient().getConfigString())) {
 			return clientSessionSettingsLocator.loadSettingsFromString(properties.getClient().getConfigString());
 		}
@@ -111,7 +114,7 @@ public class QuickFixJClientAutoConfiguration {
 	@Bean
 	@ConditionalOnClass(Application.class)
 	@ConditionalOnMissingBean(name = "clientApplication")
-	public Application clientApplication(ApplicationEventPublisher applicationEventPublisher) {
+	public Application clientApplication(final ApplicationEventPublisher applicationEventPublisher) {
 		return new EventPublisherApplicationAdapter(applicationEventPublisher);
 	}
 
@@ -133,7 +136,7 @@ public class QuickFixJClientAutoConfiguration {
 		 * @return The client's {@link MessageStoreFactory}
 		 */
 		@Bean
-		public MessageStoreFactory clientMessageStoreFactory(SessionSettings clientSessionSettings) {
+		public MessageStoreFactory clientMessageStoreFactory(final SessionSettings clientSessionSettings) {
 			return new CachedFileStoreFactory(clientSessionSettings);
 		}
 	}
@@ -153,7 +156,7 @@ public class QuickFixJClientAutoConfiguration {
 		 * @return The client's {@link MessageStoreFactory}
 		 */
 		@Bean
-		public MessageStoreFactory clientMessageStoreFactory(SessionSettings clientSessionSettings) {
+		public MessageStoreFactory clientMessageStoreFactory(final SessionSettings clientSessionSettings) {
 			return new FileStoreFactory(clientSessionSettings);
 		}
 	}
@@ -173,8 +176,11 @@ public class QuickFixJClientAutoConfiguration {
 		 * @return The client's {@link MessageStoreFactory}
 		 */
 		@Bean
-		public MessageStoreFactory clientMessageStoreFactory(SessionSettings clientSessionSettings) {
-			return new JdbcStoreFactory(clientSessionSettings);
+		public MessageStoreFactory clientMessageStoreFactory(
+				final SessionSettings clientSessionSettings, final DataSource dataSource) {
+			final JdbcStoreFactory jdbcStoreFactory = new JdbcStoreFactory(clientSessionSettings);
+			jdbcStoreFactory.setDataSource(dataSource);
+			return jdbcStoreFactory;
 		}
 	}
 
@@ -230,7 +236,7 @@ public class QuickFixJClientAutoConfiguration {
 		 * @return The client's {@link MessageStoreFactory}
 		 */
 		@Bean
-		public MessageStoreFactory clientMessageStoreFactory(SessionSettings clientSessionSettings) {
+		public MessageStoreFactory clientMessageStoreFactory(final SessionSettings clientSessionSettings) {
 			return new SleepycatStoreFactory(clientSessionSettings);
 		}
 	}
@@ -250,7 +256,7 @@ public class QuickFixJClientAutoConfiguration {
 		 * @return The client's {@link LogFactory}
 		 */
 		@Bean
-		public LogFactory clientLogFactory(SessionSettings clientSessionSettings) {
+		public LogFactory clientLogFactory(final SessionSettings clientSessionSettings) {
 			return new FileLogFactory(clientSessionSettings);
 		}
 	}
@@ -270,8 +276,11 @@ public class QuickFixJClientAutoConfiguration {
 		 * @return The client's {@link LogFactory}
 		 */
 		@Bean
-		public LogFactory clientLogFactory(SessionSettings clientSessionSettings) {
-			return new JdbcLogFactory(clientSessionSettings);
+		public LogFactory clientLogFactory(final SessionSettings clientSessionSettings,
+				final DataSource dataSource) {
+			final JdbcLogFactory jdbcLogFactory = new JdbcLogFactory(clientSessionSettings);
+			jdbcLogFactory.setDataSource(dataSource);
+			return jdbcLogFactory;
 		}
 	}
 
@@ -290,7 +299,7 @@ public class QuickFixJClientAutoConfiguration {
 		 * @return The client's {@link LogFactory}
 		 */
 		@Bean
-		public LogFactory clientLogFactory(SessionSettings clientSessionSettings) {
+		public LogFactory clientLogFactory(final SessionSettings clientSessionSettings) {
 			return new SLF4JLogFactory(clientSessionSettings);
 		}
 	}
@@ -310,7 +319,7 @@ public class QuickFixJClientAutoConfiguration {
 		 * @return The client's {@link LogFactory}
 		 */
 		@Bean
-		public LogFactory clientLogFactory(SessionSettings clientSessionSettings) {
+		public LogFactory clientLogFactory(final SessionSettings clientSessionSettings) {
 			return new ScreenLogFactory(clientSessionSettings);
 		}
 	}
@@ -346,14 +355,14 @@ public class QuickFixJClientAutoConfiguration {
 		 * @throws ConfigError exception thrown when a configuration error is detected
 		 */
 		@Bean
-		public Initiator clientInitiator(Application clientApplication,
-		                                 MessageStoreFactory clientMessageStoreFactory,
-		                                 SessionSettings clientSessionSettings,
-		                                 LogFactory clientLogFactory,
-		                                 MessageFactory clientMessageFactory,
-		                                 Optional<ExecutorFactory> clientExecutorFactory) throws ConfigError {
+		public Initiator clientInitiator(final Application clientApplication,
+				final MessageStoreFactory clientMessageStoreFactory,
+				final SessionSettings clientSessionSettings,
+				final LogFactory clientLogFactory,
+				final MessageFactory clientMessageFactory,
+				final Optional<ExecutorFactory> clientExecutorFactory) throws ConfigError {
 
-			SocketInitiator socketInitiator = SocketInitiator.newBuilder()
+			final SocketInitiator socketInitiator = SocketInitiator.newBuilder()
 					.withApplication(clientApplication)
 					.withMessageStoreFactory(clientMessageStoreFactory)
 					.withSettings(clientSessionSettings)
@@ -384,14 +393,14 @@ public class QuickFixJClientAutoConfiguration {
 		 * @throws ConfigError exception thrown when a configuration error is detected
 		 */
 		@Bean
-		public Initiator clientInitiator(Application clientApplication,
-		                                 MessageStoreFactory clientMessageStoreFactory,
-		                                 SessionSettings clientSessionSettings,
-		                                 LogFactory clientLogFactory,
-		                                 MessageFactory clientMessageFactory,
-		                                 Optional<ExecutorFactory> clientExecutorFactory) throws ConfigError {
+		public Initiator clientInitiator(final Application clientApplication,
+				final MessageStoreFactory clientMessageStoreFactory,
+				final SessionSettings clientSessionSettings,
+				final LogFactory clientLogFactory,
+				final MessageFactory clientMessageFactory,
+				final Optional<ExecutorFactory> clientExecutorFactory) throws ConfigError {
 
-			ThreadedSocketInitiator socketInitiator = ThreadedSocketInitiator.newBuilder()
+			final ThreadedSocketInitiator socketInitiator = ThreadedSocketInitiator.newBuilder()
 					.withApplication(clientApplication)
 					.withMessageStoreFactory(clientMessageStoreFactory)
 					.withSettings(clientSessionSettings)
@@ -407,7 +416,7 @@ public class QuickFixJClientAutoConfiguration {
 	@ConditionalOnClass(ExecutorFactory.class)
 	@ConditionalOnMissingBean(name = "clientExecutorFactory")
 	@ConditionalOnProperty(prefix = "quickfixj.client.concurrent", name = "useDefaultExecutorFactory", havingValue = "true")
-	public ExecutorFactory clientExecutorFactory(Executor clientTaskExecutor) {
+	public ExecutorFactory clientExecutorFactory(final Executor clientTaskExecutor) {
 		return new ExecutorFactory() {
 			@Override
 			public Executor getLongLivedExecutor() {
@@ -424,8 +433,8 @@ public class QuickFixJClientAutoConfiguration {
 	@Bean
 	@ConditionalOnMissingBean(name = "clientTaskExecutor")
 	@ConditionalOnProperty(prefix = "quickfixj.client.concurrent", name = "useDefaultExecutorFactory", havingValue = "true")
-	public Executor clientTaskExecutor(QuickFixJBootProperties properties) {
-		ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+	public Executor clientTaskExecutor(final QuickFixJBootProperties properties) {
+		final ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
 		executor.setQueueCapacity(properties.getClient().getConcurrent().getQueueCapacity());
 		executor.setCorePoolSize(properties.getClient().getConcurrent().getCorePoolSize());
 		executor.setMaxPoolSize(properties.getClient().getConcurrent().getMaxPoolSize());
@@ -445,8 +454,8 @@ public class QuickFixJClientAutoConfiguration {
 	 * @return The client's {@link ConnectorManager}
 	 */
 	@Bean
-	public ConnectorManager clientConnectorManager(Initiator clientInitiator, QuickFixJBootProperties properties) {
-		ConnectorManager connectorManager = new ConnectorManager(clientInitiator);
+	public ConnectorManager clientConnectorManager(final Initiator clientInitiator, final QuickFixJBootProperties properties) {
+		final ConnectorManager connectorManager = new ConnectorManager(clientInitiator);
 		if (properties.getClient() != null) {
 			connectorManager.setAutoStartup(properties.getClient().isAutoStartup());
 			connectorManager.setPhase(properties.getClient().getPhase());
@@ -466,12 +475,12 @@ public class QuickFixJClientAutoConfiguration {
 	@ConditionalOnClass(JmxExporter.class)
 	@ConditionalOnSingleCandidate(Initiator.class)
 	@ConditionalOnMissingBean(name = "clientInitiatorMBean")
-	public ObjectName clientInitiatorMBean(Initiator clientInitiator) {
+	public ObjectName clientInitiatorMBean(final Initiator clientInitiator) {
 		try {
-			JmxExporter exporter = new JmxExporter();
+			final JmxExporter exporter = new JmxExporter();
 			exporter.setRegistrationBehavior(REGISTRATION_REPLACE_EXISTING);
 			return exporter.register(clientInitiator);
-		} catch (Exception e) {
+		} catch (final Exception e) {
 			throw new ConfigurationException(e.getMessage(), e);
 		}
 	}
@@ -483,7 +492,7 @@ public class QuickFixJClientAutoConfiguration {
 	 * @return the client's {@link SessionSettingsLocator}
 	 */
 	@Bean
-	public SessionSettingsLocator clientSessionSettingsLocator(ResourceLoader resourceLoader) {
+	public SessionSettingsLocator clientSessionSettingsLocator(final ResourceLoader resourceLoader) {
 		return new SessionSettingsLocator(resourceLoader);
 	}
 }

@@ -15,11 +15,15 @@
  */
 package io.allune.quickfixj.spring.boot.starter.autoconfigure.server;
 
-import io.allune.quickfixj.spring.boot.starter.application.EventPublisherApplicationAdapter;
-import io.allune.quickfixj.spring.boot.starter.autoconfigure.QuickFixJBootProperties;
-import io.allune.quickfixj.spring.boot.starter.connection.ConnectorManager;
-import io.allune.quickfixj.spring.boot.starter.connection.SessionSettingsLocator;
-import io.allune.quickfixj.spring.boot.starter.exception.ConfigurationException;
+import static org.apache.commons.lang3.StringUtils.isNotEmpty;
+import static org.quickfixj.jmx.JmxExporter.REGISTRATION_REPLACE_EXISTING;
+
+import java.util.Optional;
+import java.util.concurrent.Executor;
+
+import javax.management.ObjectName;
+import javax.sql.DataSource;
+
 import org.quickfixj.jmx.JmxExporter;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -33,6 +37,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+import io.allune.quickfixj.spring.boot.starter.application.EventPublisherApplicationAdapter;
+import io.allune.quickfixj.spring.boot.starter.autoconfigure.QuickFixJBootProperties;
+import io.allune.quickfixj.spring.boot.starter.connection.ConnectorManager;
+import io.allune.quickfixj.spring.boot.starter.connection.SessionSettingsLocator;
+import io.allune.quickfixj.spring.boot.starter.exception.ConfigurationException;
 import quickfix.Acceptor;
 import quickfix.Application;
 import quickfix.CachedFileStoreFactory;
@@ -54,13 +64,6 @@ import quickfix.SessionSettings;
 import quickfix.SleepycatStoreFactory;
 import quickfix.SocketAcceptor;
 import quickfix.ThreadedSocketAcceptor;
-
-import javax.management.ObjectName;
-import java.util.Optional;
-import java.util.concurrent.Executor;
-
-import static org.apache.commons.lang3.StringUtils.isNotEmpty;
-import static org.quickfixj.jmx.JmxExporter.REGISTRATION_REPLACE_EXISTING;
 
 /**
  * {@link EnableAutoConfiguration Auto-configuration} for QuickFIX/J Server (Acceptor)
@@ -87,8 +90,8 @@ public class QuickFixJServerAutoConfiguration {
 	@Bean(name = "serverSessionSettings")
 	@ConditionalOnMissingBean(name = "serverSessionSettings")
 	public SessionSettings serverSessionSettings(
-			SessionSettingsLocator serverSessionSettingsLocator, QuickFixJBootProperties properties
-	) {
+			final SessionSettingsLocator serverSessionSettingsLocator, final QuickFixJBootProperties properties
+			) {
 		if (isNotEmpty(properties.getServer().getConfigString())) {
 			return serverSessionSettingsLocator.loadSettingsFromString(properties.getServer().getConfigString());
 		}
@@ -109,7 +112,7 @@ public class QuickFixJServerAutoConfiguration {
 	 */
 	@Bean
 	@ConditionalOnMissingBean(name = "serverApplication")
-	public Application serverApplication(ApplicationEventPublisher applicationEventPublisher) {
+	public Application serverApplication(final ApplicationEventPublisher applicationEventPublisher) {
 		return new EventPublisherApplicationAdapter(applicationEventPublisher);
 	}
 
@@ -128,7 +131,7 @@ public class QuickFixJServerAutoConfiguration {
 		 * @return The server's {@link MessageStoreFactory}
 		 */
 		@Bean
-		public MessageStoreFactory serverMessageStoreFactory(SessionSettings serverSessionSettings) {
+		public MessageStoreFactory serverMessageStoreFactory(final SessionSettings serverSessionSettings) {
 			return new CachedFileStoreFactory(serverSessionSettings);
 		}
 	}
@@ -147,7 +150,7 @@ public class QuickFixJServerAutoConfiguration {
 		 * @return The server's {@link MessageStoreFactory}
 		 */
 		@Bean
-		public MessageStoreFactory serverMessageStoreFactory(SessionSettings serverSessionSettings) {
+		public MessageStoreFactory serverMessageStoreFactory(final SessionSettings serverSessionSettings) {
 			return new FileStoreFactory(serverSessionSettings);
 		}
 	}
@@ -159,16 +162,22 @@ public class QuickFixJServerAutoConfiguration {
 	static class JdbcMessageStoreFactoryConfiguration {
 
 		/**
-		 * Creates the server's {@link MessageStoreFactory} of type {@link JdbcStoreFactory} if
-		 * {@code quickfixj.server.message-store-factory} is set to {@code jdbc}, used in the creation of the
-		 * {@link Acceptor acceptor} connector
+		 * Creates the server's {@link MessageStoreFactory} of type
+		 * {@link JdbcStoreFactory} if
+		 * {@code quickfixj.server.message-store-factory} is set to
+		 * {@code jdbc}, used in the creation of the {@link Acceptor acceptor}
+		 * connector
 		 *
-		 * @param serverSessionSettings The server's {@link SessionSettings session settings} bean
+		 * @param serverSessionSettings
+		 *            The server's {@link SessionSettings session settings} bean
 		 * @return The server's {@link MessageStoreFactory}
 		 */
 		@Bean
-		public MessageStoreFactory serverMessageStoreFactory(SessionSettings serverSessionSettings) {
-			return new JdbcStoreFactory(serverSessionSettings);
+		public MessageStoreFactory serverMessageStoreFactory(
+				final SessionSettings clientSessionSettings, final DataSource dataSource) {
+			final JdbcStoreFactory jdbcStoreFactory = new JdbcStoreFactory(clientSessionSettings);
+			jdbcStoreFactory.setDataSource(dataSource);
+			return jdbcStoreFactory;
 		}
 	}
 
@@ -225,7 +234,7 @@ public class QuickFixJServerAutoConfiguration {
 		 * @return The server's {@link MessageStoreFactory}
 		 */
 		@Bean
-		public MessageStoreFactory serverMessageStoreFactory(SessionSettings serverSessionSettings) {
+		public MessageStoreFactory serverMessageStoreFactory(final SessionSettings serverSessionSettings) {
 			return new SleepycatStoreFactory(serverSessionSettings);
 		}
 	}
@@ -245,7 +254,7 @@ public class QuickFixJServerAutoConfiguration {
 		 * @return The server's {@link LogFactory}
 		 */
 		@Bean
-		public LogFactory serverLogFactory(SessionSettings serverSessionSettings) {
+		public LogFactory serverLogFactory(final SessionSettings serverSessionSettings) {
 			return new FileLogFactory(serverSessionSettings);
 		}
 	}
@@ -264,9 +273,13 @@ public class QuickFixJServerAutoConfiguration {
 		 * @param serverSessionSettings The server's {@link SessionSettings session settings} bean
 		 * @return The server's {@link LogFactory}
 		 */
+
 		@Bean
-		public LogFactory serverLogFactory(SessionSettings serverSessionSettings) {
-			return new JdbcLogFactory(serverSessionSettings);
+		public LogFactory serverLogFactory(final SessionSettings clientSessionSettings,
+				final DataSource dataSource) {
+			final JdbcLogFactory jdbcLogFactory = new JdbcLogFactory(clientSessionSettings);
+			jdbcLogFactory.setDataSource(dataSource);
+			return jdbcLogFactory;
 		}
 	}
 
@@ -285,7 +298,7 @@ public class QuickFixJServerAutoConfiguration {
 		 * @return The server's {@link LogFactory}
 		 */
 		@Bean
-		public LogFactory serverLogFactory(SessionSettings serverSessionSettings) {
+		public LogFactory serverLogFactory(final SessionSettings serverSessionSettings) {
 			return new SLF4JLogFactory(serverSessionSettings);
 		}
 	}
@@ -305,7 +318,7 @@ public class QuickFixJServerAutoConfiguration {
 		 * @return The server's {@link LogFactory}
 		 */
 		@Bean
-		public LogFactory serverLogFactory(SessionSettings serverSessionSettings) {
+		public LogFactory serverLogFactory(final SessionSettings serverSessionSettings) {
 			return new ScreenLogFactory(serverSessionSettings);
 		}
 	}
@@ -340,14 +353,14 @@ public class QuickFixJServerAutoConfiguration {
 		 * @throws ConfigError exception thrown when a configuration error is detected
 		 */
 		@Bean
-		public Acceptor serverAcceptor(Application serverApplication,
-		                               MessageStoreFactory serverMessageStoreFactory,
-		                               SessionSettings serverSessionSettings,
-		                               LogFactory serverLogFactory,
-		                               MessageFactory serverMessageFactory,
-		                               Optional<ExecutorFactory> serverExecutorFactory) throws ConfigError {
+		public Acceptor serverAcceptor(final Application serverApplication,
+				final MessageStoreFactory serverMessageStoreFactory,
+				final SessionSettings serverSessionSettings,
+				final LogFactory serverLogFactory,
+				final MessageFactory serverMessageFactory,
+				final Optional<ExecutorFactory> serverExecutorFactory) throws ConfigError {
 
-			SocketAcceptor socketAcceptor = SocketAcceptor.newBuilder()
+			final SocketAcceptor socketAcceptor = SocketAcceptor.newBuilder()
 					.withApplication(serverApplication)
 					.withMessageStoreFactory(serverMessageStoreFactory)
 					.withSettings(serverSessionSettings)
@@ -378,14 +391,14 @@ public class QuickFixJServerAutoConfiguration {
 		 * @throws ConfigError exception thrown when a configuration error is detected
 		 */
 		@Bean
-		public Acceptor serverAcceptor(Application serverApplication,
-		                               MessageStoreFactory serverMessageStoreFactory,
-		                               SessionSettings serverSessionSettings,
-		                               LogFactory serverLogFactory,
-		                               MessageFactory serverMessageFactory,
-		                               Optional<ExecutorFactory> serverExecutorFactory) throws ConfigError {
+		public Acceptor serverAcceptor(final Application serverApplication,
+				final MessageStoreFactory serverMessageStoreFactory,
+				final SessionSettings serverSessionSettings,
+				final LogFactory serverLogFactory,
+				final MessageFactory serverMessageFactory,
+				final Optional<ExecutorFactory> serverExecutorFactory) throws ConfigError {
 
-			ThreadedSocketAcceptor socketAcceptor = ThreadedSocketAcceptor.newBuilder()
+			final ThreadedSocketAcceptor socketAcceptor = ThreadedSocketAcceptor.newBuilder()
 					.withApplication(serverApplication)
 					.withMessageStoreFactory(serverMessageStoreFactory)
 					.withSettings(serverSessionSettings)
@@ -401,7 +414,7 @@ public class QuickFixJServerAutoConfiguration {
 	@ConditionalOnClass(ExecutorFactory.class)
 	@ConditionalOnMissingBean(name = "serverExecutorFactory")
 	@ConditionalOnProperty(prefix = "quickfixj.server.concurrent", name = "useDefaultExecutorFactory", havingValue = "true")
-	public ExecutorFactory serverExecutorFactory(Executor serverTaskExecutor) {
+	public ExecutorFactory serverExecutorFactory(final Executor serverTaskExecutor) {
 		return new ExecutorFactory() {
 			@Override
 			public Executor getLongLivedExecutor() {
@@ -418,8 +431,8 @@ public class QuickFixJServerAutoConfiguration {
 	@Bean
 	@ConditionalOnMissingBean(name = "serverTaskExecutor")
 	@ConditionalOnProperty(prefix = "quickfixj.server.concurrent", name = "useDefaultExecutorFactory", havingValue = "true")
-	public Executor serverTaskExecutor(QuickFixJBootProperties properties) {
-		ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+	public Executor serverTaskExecutor(final QuickFixJBootProperties properties) {
+		final ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
 		executor.setQueueCapacity(properties.getServer().getConcurrent().getQueueCapacity());
 		executor.setCorePoolSize(properties.getServer().getConcurrent().getCorePoolSize());
 		executor.setMaxPoolSize(properties.getServer().getConcurrent().getMaxPoolSize());
@@ -439,8 +452,8 @@ public class QuickFixJServerAutoConfiguration {
 	 * @return The server's {@link ConnectorManager}
 	 */
 	@Bean
-	public ConnectorManager serverConnectorManager(Acceptor serverAcceptor, QuickFixJBootProperties properties) {
-		ConnectorManager connectorManager = new ConnectorManager(serverAcceptor);
+	public ConnectorManager serverConnectorManager(final Acceptor serverAcceptor, final QuickFixJBootProperties properties) {
+		final ConnectorManager connectorManager = new ConnectorManager(serverAcceptor);
 		if (properties.getServer() != null) {
 			connectorManager.setAutoStartup(properties.getServer().isAutoStartup());
 			connectorManager.setPhase(properties.getServer().getPhase());
@@ -460,12 +473,12 @@ public class QuickFixJServerAutoConfiguration {
 	@ConditionalOnClass(JmxExporter.class)
 	@ConditionalOnSingleCandidate(Acceptor.class)
 	@ConditionalOnMissingBean(name = "serverAcceptorMBean")
-	public ObjectName serverAcceptorMBean(Acceptor serverAcceptor) {
+	public ObjectName serverAcceptorMBean(final Acceptor serverAcceptor) {
 		try {
-			JmxExporter exporter = new JmxExporter();
+			final JmxExporter exporter = new JmxExporter();
 			exporter.setRegistrationBehavior(REGISTRATION_REPLACE_EXISTING);
 			return exporter.register(serverAcceptor);
-		} catch (Exception e) {
+		} catch (final Exception e) {
 			throw new ConfigurationException(e.getMessage(), e);
 		}
 	}
@@ -477,7 +490,7 @@ public class QuickFixJServerAutoConfiguration {
 	 * @return the server's {@link SessionSettingsLocator}
 	 */
 	@Bean
-	public SessionSettingsLocator serverSessionSettingsLocator(ResourceLoader resourceLoader) {
+	public SessionSettingsLocator serverSessionSettingsLocator(final ResourceLoader resourceLoader) {
 		return new SessionSettingsLocator(resourceLoader);
 	}
 }

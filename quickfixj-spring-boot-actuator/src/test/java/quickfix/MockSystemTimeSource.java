@@ -21,52 +21,52 @@ import java.time.ZoneOffset;
 import java.util.Calendar;
 
 public class MockSystemTimeSource implements SystemTimeSource {
-    private long[] systemTimes = {System.currentTimeMillis()};
-    private int offset;
+	private long[] systemTimes = {System.currentTimeMillis()};
+	private int offset;
 
-    public MockSystemTimeSource() {
-        // empty
-    }
+	public MockSystemTimeSource() {
+		// empty
+	}
 
-    public MockSystemTimeSource(long time) {
-        setSystemTimes(time);
-    }
+	public MockSystemTimeSource(final long time) {
+		setSystemTimes(time);
+	}
 
-    public void setSystemTimes(long[] times) {
-        systemTimes = times;
-    }
+	public void setSystemTimes(final long[] times) {
+		systemTimes = times;
+	}
 
-    void setSystemTimes(long time) {
-        systemTimes = new long[]{time};
-    }
+	void setSystemTimes(final long time) {
+		systemTimes = new long[]{time};
+	}
 
-    public void setTime(Calendar c) {
-        setSystemTimes(c.getTimeInMillis());
-    }
+	public void setTime(final Calendar c) {
+		setSystemTimes(c.getTimeInMillis());
+	}
 
-    @Override
-    public long getTime() {
-        if (systemTimes.length - offset > 1) {
-            offset++;
-        }
-        return systemTimes[offset];
-    }
+	@Override
+	public long getTime() {
+		if (systemTimes.length - offset > 1) {
+			offset++;
+		}
+		return systemTimes[offset];
+	}
 
-    @Override
-    public long getTimeFromNanos() {
-        return 0;
-    }
+	// @Override
+	public long getTimeFromNanos() {
+		return 0;
+	}
 
-    public void increment(long delta) {
-        if (systemTimes.length - offset == 1) {
-            systemTimes[offset] += delta;
-        }
-    }
+	public void increment(final long delta) {
+		if (systemTimes.length - offset == 1) {
+			systemTimes[offset] += delta;
+		}
+	}
 
-    @Override
-    public LocalDateTime getNow() {
-        // TODO maybe we need nano-precision later on
-        return LocalDateTime.ofInstant(Instant.ofEpochMilli(getTime()), ZoneOffset.UTC);
-    }
+	@Override
+	public LocalDateTime getNow() {
+		// TODO maybe we need nano-precision later on
+		return LocalDateTime.ofInstant(Instant.ofEpochMilli(getTime()), ZoneOffset.UTC);
+	}
 
 }

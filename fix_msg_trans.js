@@ -416,7 +416,7 @@ const convertMessage = (msg) => {
     if (index != items.length - 1) {
       const equalCharPos = item.indexOf('=')
       const fieldIndex = item.substring(0, equalCharPos)
-      console.log(`${getField(fieldIndex)}: ${item.substring(equalCharPos + 1)}`)
+      console.log(`${getField(fieldIndex)}[${fieldIndex}]: ${item.substring(equalCharPos + 1)}`)
     }
   })
 }
